@@ -4,7 +4,7 @@ from app.config import GEMINI_API_KEY
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-_MODEL_NAME = "gemini-1.5-flash"
+_MODEL_NAME = "gemini-3.5-flash"
 
 
 def ask_gemini(stats: dict, stage: dict, question: str) -> str:

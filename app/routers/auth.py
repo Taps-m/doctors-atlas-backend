@@ -16,6 +16,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
 
+    if payload.avatar_url and len(payload.avatar_url) > 500_000:
+        raise HTTPException(status_code=400, detail="Photo is too large - please use a smaller image")
+    
     clinic_id = None
     if payload.role == "doctor":
         clinic = Clinic(name=payload.clinic_name or f"{payload.name}'s Clinic")
@@ -38,6 +41,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         password_hash=hash_password(payload.password),
         role=payload.role,
         clinic_id=clinic_id,
+        avatar_url=payload.avatar_url,
     )
     db.add(user)
     db.commit()

@@ -30,6 +30,7 @@ class User(Base):
     email = Column(Text, nullable=False, unique=True)
     password_hash = Column(Text, nullable=False)
     role = Column(Text, nullable=False)  # 'admin' or 'doctor'
+    avatar_url = Column(Text)  # small base64 data URI, uploaded from the browser
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     clinic = relationship("Clinic", back_populates="users")

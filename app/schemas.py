@@ -11,7 +11,7 @@ class RegisterRequest(BaseModel):
     role: Literal["admin", "doctor", "staff"] = "doctor"
     clinic_name: Optional[str] = None  # used when role == "doctor" (creates a new clinic)
     clinic_id: Optional[int] = None  # used when role == "staff" (joins an existing clinic)
-
+    avatar_url: Optional[str] = None  # small base64 data URI from the sign-up photo upload
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -31,6 +31,7 @@ class UserOut(BaseModel):
     email: EmailStr
     role: str
     clinic_id: Optional[int]
+    avatar_url: Optional[str] = None
 
     class Config:
         from_attributes = True

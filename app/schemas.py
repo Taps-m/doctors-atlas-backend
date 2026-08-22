@@ -1,0 +1,77 @@
+from datetime import datetime, date
+from typing import Optional, Literal
+
+from pydantic import BaseModel, EmailStr
+
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    role: Literal["admin", "doctor", "staff"] = "doctor"
+    clinic_name: Optional[str] = None  # used when role == "doctor" (creates a new clinic)
+    clinic_id: Optional[int] = None  # used when role == "staff" (joins an existing clinic)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+    name: str
+
+
+class UserOut(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    role: str
+    clinic_id: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
+class AskAdvisorRequest(BaseModel):
+    question: str
+
+
+class AskAdvisorResponse(BaseModel):
+    answer: str
+    created_at: datetime
+
+
+class StartActionRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+
+
+class DailyLogRequest(BaseModel):
+    """Matches the end-of-day form: new/returning patients, total
+    consultations, no-shows, revenue, new enquiries. Defaults to today
+    if no date is given."""
+    log_date: Optional[date] = None
+    new_patients: int = 0
+    returning_patients: int = 0
+    total_consultations: int = 0
+    no_shows: int = 0
+    revenue: float = 0
+    new_enquiries: int = 0
+
+
+class DailyLogOut(BaseModel):
+    id: int
+    log_date: date
+    new_patients: int
+    returning_patients: int
+    total_consultations: int
+    no_shows: int
+    revenue: float
+    new_enquiries: int
+
+    class Config:
+        from_attributes = True

@@ -83,15 +83,21 @@ def compute_stats(db: Session, clinic_id: int, days: int = 17) -> dict:
     """
     prev_start, start, end = _period_bounds(days)
 
-    def logs_in(period_start, period_end):
-        return db.query(DailyLog).filter(
+        def logs_in(period_start, period_end, inclusive_end=False):
+        query = db.query(DailyLog).filter(
             DailyLog.clinic_id == clinic_id,
             DailyLog.log_date >= period_start,
-            DailyLog.log_date < period_end,
-        ).all()
+        )
+        if inclusive_end:
+            query = query.filter(DailyLog.log_date <= period_end)
+        else:
+            query = query.filter(DailyLog.log_date < period_end)
+        return query.all()
 
-    current = logs_in(start, end)
-    previous = logs_in(prev_start, start)
+    # "end" is today's date - use inclusive_end so today's log entry counts
+    # towards the current period instead of being excluded by a strict "<".
+    current = logs_in(start, end, inclusive_end=True)
+    previous = logs_in(prev_start, start, inclusive_end=False)
 
     def summarize(logs):
         total_consultations = sum(l.total_consultations for l in logs)

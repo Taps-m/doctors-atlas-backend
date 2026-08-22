@@ -83,7 +83,7 @@ def compute_stats(db: Session, clinic_id: int, days: int = 17) -> dict:
     """
     prev_start, start, end = _period_bounds(days)
 
-        def logs_in(period_start, period_end, inclusive_end=False):
+    def logs_in(period_start, period_end, inclusive_end=False):
         query = db.query(DailyLog).filter(
             DailyLog.clinic_id == clinic_id,
             DailyLog.log_date >= period_start,

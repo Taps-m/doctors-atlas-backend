@@ -95,3 +95,13 @@ class PatientOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AppointmentCreate(BaseModel):
+    """Payload for booking a new appointment from the Appointments page."""
+    patient_id: int
+    scheduled_at: datetime
+
+
+class AppointmentStatusUpdate(BaseModel):
+    status: Literal["scheduled", "completed", "no_show", "cancelled"]

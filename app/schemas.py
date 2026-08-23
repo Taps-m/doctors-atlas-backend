@@ -105,3 +105,38 @@ class AppointmentCreate(BaseModel):
 
 class AppointmentStatusUpdate(BaseModel):
     status: Literal["scheduled", "completed", "no_show", "cancelled"]
+
+
+class UpdateProfileRequest(BaseModel):
+    """Payload for the Settings > Profile form. Either field can be
+    sent alone - only the fields provided are changed."""
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class UpdateClinicRequest(BaseModel):
+    name: str
+
+
+class ClinicOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class StaffOut(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

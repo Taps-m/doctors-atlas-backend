@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS
 from app.database import engine, Base
 from app import models  # noqa: F401  (registers models with Base.metadata)
-from app.routers import auth, stats, advisor, actions, daily_log, patients, appointments
+from app.routers import auth, stats, advisor, actions, daily_log, patients, appointments, settings
 
 app = FastAPI(title="Doctors Atlas API")
 
@@ -36,3 +36,4 @@ app.include_router(actions.router, prefix="/actions", tags=["actions"])
 app.include_router(daily_log.router, prefix="/daily-log", tags=["daily-log"])
 app.include_router(patients.router, prefix="/patients", tags=["patients"])
 app.include_router(appointments.router, prefix="/appointments", tags=["appointments"])
+app.include_router(settings.router, prefix="/settings", tags=["settings"])

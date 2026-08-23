@@ -120,12 +120,17 @@ class ChangePasswordRequest(BaseModel):
 
 
 class UpdateClinicRequest(BaseModel):
-    name: str
+    """Both fields are optional - the doctor can rename her clinic, add
+    or remove a logo, or do one without the other. Nothing is required
+    of her."""
+    name: Optional[str] = None
+    logo_url: Optional[str] = None
 
 
 class ClinicOut(BaseModel):
     id: int
     name: str
+    logo_url: Optional[str] = None
 
     class Config:
         from_attributes = True

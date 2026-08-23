@@ -12,6 +12,10 @@ class Clinic(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
+    # Optional - a small base64 data URI uploaded from Settings. The
+    # clinic works perfectly well without one; the UI falls back to a
+    # generic icon.
+    logo_url = Column(Text)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="clinic")

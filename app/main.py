@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import CORS_ORIGINS
 from app.database import engine, Base
@@ -17,11 +18,25 @@ app.add_middleware(
 )
 
 
+# Small, idempotent column additions. create_all() below only creates
+# tables that don't exist yet - it never alters an existing one - so a
+# new column on an existing table needs an explicit ALTER. Each of
+# these uses IF NOT EXISTS, so running them on every startup is safe
+# and no manual database step is required when deploying.
+COLUMN_MIGRATIONS = [
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS logo_url TEXT",
+]
+
+
 @app.on_event("startup")
 def on_startup():
     # Creates any tables that don't exist yet. For real schema changes
     # later, switch to Alembic migrations instead of relying on this.
     Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as conn:
+        for statement in COLUMN_MIGRATIONS:
+            conn.execute(text(statement))
 
 
 @app.get("/health")

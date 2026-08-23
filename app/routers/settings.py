@@ -75,13 +75,26 @@ def update_clinic(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("doctor", "admin")),
 ):
+    """
+    Update the clinic's name and/or logo. Both are optional and
+    independent - sending only a logo leaves the name untouched, and
+    sending an empty logo_url clears it. Nothing here is mandatory:
+    a clinic works perfectly well with no logo at all.
+    """
     clinic = db.query(Clinic).filter(Clinic.id == current_user.clinic_id).first()
     if not clinic:
         raise HTTPException(status_code=400, detail="This account has no clinic attached")
-    if not payload.name.strip():
-        raise HTTPException(status_code=400, detail="Clinic name cannot be empty")
 
-    clinic.name = payload.name.strip()
+    if payload.name is not None:
+        if not payload.name.strip():
+            raise HTTPException(status_code=400, detail="Clinic name cannot be empty")
+        clinic.name = payload.name.strip()
+
+    if payload.logo_url is not None:
+        if len(payload.logo_url) > 500_000:
+            raise HTTPException(status_code=400, detail="Logo is too large - please use a smaller image")
+        clinic.logo_url = payload.logo_url or None  # empty string = remove
+
     db.commit()
     db.refresh(clinic)
     return clinic

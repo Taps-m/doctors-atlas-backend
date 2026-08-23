@@ -13,6 +13,7 @@ class RegisterRequest(BaseModel):
     clinic_id: Optional[int] = None  # used when role == "staff" (joins an existing clinic)
     avatar_url: Optional[str] = None  # small base64 data URI from the sign-up photo upload
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -73,6 +74,24 @@ class DailyLogOut(BaseModel):
     no_shows: int
     revenue: float
     new_enquiries: int
+
+    class Config:
+        from_attributes = True
+
+
+class PatientCreate(BaseModel):
+    """Payload for adding a new patient from the Patients page."""
+    name: str
+    phone: Optional[str] = None
+    first_visit_at: Optional[datetime] = None
+
+
+class PatientOut(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    first_visit_at: Optional[datetime] = None
+    created_at: datetime
 
     class Config:
         from_attributes = True

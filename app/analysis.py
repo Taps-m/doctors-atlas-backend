@@ -68,20 +68,38 @@ def compute_data_stage(clinic_created_at: datetime) -> dict:
     }
 
 
-def _period_bounds(days: int = 17):
+def _period_bounds(days: int = 17, start_date: Optional[date] = None, end_date: Optional[date] = None):
+    if start_date and end_date:
+        start = start_date
+        end = end_date
+        period_len = max((end - start).days, 1)
+        prev_start = start - timedelta(days=period_len)
+        return prev_start, start, end
+
     end = date.today()
     start = end - timedelta(days=days)
     prev_start = start - timedelta(days=days)
     return prev_start, start, end
 
 
-def compute_stats(db: Session, clinic_id: int, days: int = 17) -> dict:
+def compute_stats(
+    db: Session,
+    clinic_id: int,
+    days: int = 17,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> dict:
     """
     Computed entirely from daily_logs - the end-of-day form totals -
     rather than individual visit records. Simpler, and matches how
     data actually enters the system in the MVP.
+
+    Pass start_date/end_date (e.g. from the dashboard's date-range
+    filter) to override the rolling "last N days" window with an exact
+    custom range. The "previous period" comparison window is then the
+    same length, immediately before start_date.
     """
-    prev_start, start, end = _period_bounds(days)
+    prev_start, start, end = _period_bounds(days, start_date, end_date)
 
     def logs_in(period_start, period_end, inclusive_end=False):
         query = db.query(DailyLog).filter(

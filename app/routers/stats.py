@@ -1,3 +1,6 @@
+from datetime import date
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -10,7 +13,13 @@ router = APIRouter()
 
 
 @router.get("")
-def get_stats(days: int = 17, db: Session = Depends(get_db), current_user: User = Depends(require_role("doctor", "admin"))):
+def get_stats(
+    days: int = 17,
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("doctor", "admin")),
+):
     if not current_user.clinic_id:
         raise HTTPException(status_code=400, detail="This account has no clinic attached")
-    return compute_stats(db, current_user.clinic_id, days=days)
+    return compute_stats(db, current_user.clinic_id, days=days, start_date=start, end_date=end)

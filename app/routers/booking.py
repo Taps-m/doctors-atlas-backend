@@ -56,6 +56,7 @@ def _settings_payload(db: Session, clinic: Clinic) -> BookingSettingsOut:
         slot_minutes=clinic.slot_minutes or 30,
         booking_hours=clinic.booking_hours or {},
         notify_email=clinic.notify_email,
+        phone=clinic.phone,
         blocked=[BlockedSlotOut.model_validate(b) for b in _blocked_for(db, clinic.id)],
     )
 
@@ -124,6 +125,12 @@ def update_booking_settings(
         if addr and ("@" not in addr or len(addr) > 200 or " " in addr):
             raise HTTPException(status_code=400, detail="That doesn't look like a valid email address")
         clinic.notify_email = addr or None
+
+    if payload.phone is not None:
+        num = payload.phone.strip()
+        if num and len(num) > 30:
+            raise HTTPException(status_code=400, detail="That phone number is too long")
+        clinic.phone = num or None
 
     if payload.booking_enabled is not None:
         # Refuse to switch it on with nothing bookable - otherwise she'd

@@ -36,6 +36,10 @@ class Clinic(Base):
     # Optional shared inbox (reception@, front desk) that also receives
     # booking notifications alongside the doctor's own account email.
     notify_email = Column(Text)
+    # Shown to patients on the public booking page, and - crucially -
+    # on its error state, so someone who can't book online still has a
+    # way to reach the clinic.
+    phone = Column(Text)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

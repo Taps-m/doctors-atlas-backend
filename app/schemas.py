@@ -153,6 +153,8 @@ class BookingSettingsOut(BaseModel):
     # Extra inbox copied on booking notifications. The doctor's own
     # account email always receives them and isn't configurable here.
     notify_email: Optional[str] = None
+    # Shown to patients on the booking page so they can call instead.
+    phone: Optional[str] = None
     blocked: List["BlockedSlotOut"] = []
 
 
@@ -163,8 +165,9 @@ class UpdateBookingSettingsRequest(BaseModel):
     booking_enabled: Optional[bool] = None
     slot_minutes: Optional[int] = None
     booking_hours: Optional[dict] = None
-    # Empty string clears it.
+    # Empty string clears either of these.
     notify_email: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class BlockSlotRequest(BaseModel):
@@ -186,11 +189,13 @@ class BlockedSlotOut(BaseModel):
 # ---------- Patient booking: the public, unauthenticated side ----------
 
 class PublicClinicOut(BaseModel):
-    """Deliberately minimal. A patient sees the clinic's name, its logo
-    and how long an appointment lasts - never its id, its invite code,
-    its staff, or anything about other patients."""
+    """Deliberately minimal. A patient sees the clinic's name, its logo,
+    a phone number to call, and how long an appointment lasts - never
+    its id, its invite code, its staff, or anything about other
+    patients."""
     name: str
     logo_url: Optional[str] = None
+    phone: Optional[str] = None
     slot_minutes: int
 
 

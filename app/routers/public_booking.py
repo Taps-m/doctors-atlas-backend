@@ -99,6 +99,7 @@ def public_clinic(slug: str, db: Session = Depends(get_db)):
     return PublicClinicOut(
         name=clinic.name,
         logo_url=clinic.logo_url,
+        phone=clinic.phone,
         slot_minutes=clinic.slot_minutes or 30,
     )
 

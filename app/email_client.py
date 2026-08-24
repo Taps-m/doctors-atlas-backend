@@ -3,13 +3,12 @@ Outbound email, deliberately provider-agnostic.
 
 Two ways out, both stdlib-only - no vendor SDK, no new dependency:
 
-  1. Brevo's HTTPS API, if BREVO_API_KEY is set. Preferred, because
+  1. Resend's HTTPS API, if RESEND_API_KEY is set. Preferred, because
      many hosts (Render's free tier included) block outbound traffic
      on every SMTP port, so SMTP times out no matter how correct the
      settings are. Port 443 always works.
-  2. Plain SMTP otherwise, which any provider speaks - Resend,
-     SendGrid, Mailgun, Postmark, Gmail - so switching is an
-     environment-variable change, not a code change.
+  2. Plain SMTP otherwise, which every provider speaks, so moving to
+     another one is an environment-variable change, not a code change.
 
 Two rules this module must never break:
 
@@ -32,7 +31,7 @@ from email.message import EmailMessage
 from email.utils import formataddr
 
 from app.config import (
-    BREVO_API_KEY,
+    RESEND_API_KEY,
     SMTP_HOST,
     SMTP_PORT,
     SMTP_USER,
@@ -47,45 +46,46 @@ log = logging.getLogger(__name__)
 SMTP_TIMEOUT_SECONDS = 15
 
 
-BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def email_configured() -> bool:
-    return bool((BREVO_API_KEY or SMTP_HOST) and MAIL_FROM)
+    return bool((RESEND_API_KEY or SMTP_HOST) and MAIL_FROM)
 
 
-def _send_via_brevo_api(to: str, subject: str, body_text: str, body_html: str) -> None:
+def _post_json(url: str, headers: dict, payload: dict, provider: str) -> None:
     """
-    One message over HTTPS. Raises on any non-2xx so the caller's
-    except block logs it with the response body, which is where Brevo
-    puts the actual reason (unverified sender, bad key, quota).
+    One JSON POST, with the provider's own error text preserved. That
+    text is the whole point: an unverified sender and a bad key look
+    identical from the outside, and only the response body tells them
+    apart.
     """
-    payload = {
-        "sender": {"name": MAIL_FROM_NAME or "Doctors Atlas", "email": MAIL_FROM},
-        "to": [{"email": to}],
-        "subject": subject,
-        "textContent": body_text,
-    }
-    if body_html:
-        payload["htmlContent"] = body_html
-
     request = urllib.request.Request(
-        BREVO_API_URL,
+        url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "api-key": BREVO_API_KEY,
-            "content-type": "application/json",
-            "accept": "application/json",
-        },
+        headers={"content-type": "application/json", **headers},
         method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=SMTP_TIMEOUT_SECONDS) as response:
             if response.status >= 300:
-                raise RuntimeError(f"Brevo returned {response.status}")
+                raise RuntimeError(f"{provider} returned {response.status}")
     except urllib.error.HTTPError as err:
         detail = err.read().decode("utf-8", "replace")[:500]
-        raise RuntimeError(f"Brevo rejected the message ({err.code}): {detail}") from err
+        raise RuntimeError(f"{provider} rejected the message ({err.code}): {detail}") from err
+
+
+def _send_via_resend(to: str, subject: str, body_text: str, body_html: str) -> None:
+    payload = {
+        "from": formataddr((MAIL_FROM_NAME or "Doctors Atlas", MAIL_FROM)),
+        "to": [to],
+        "subject": subject,
+        "text": body_text,
+    }
+    if body_html:
+        payload["html"] = body_html
+    _post_json(RESEND_API_URL, {"authorization": f"Bearer {RESEND_API_KEY}"},
+               payload, "Resend")
 
 
 def send_email(to: str, subject: str, body_text: str, body_html: str = "") -> bool:
@@ -108,10 +108,11 @@ def send_email(to: str, subject: str, body_text: str, body_html: str = "") -> bo
         message.add_alternative(body_html, subtype="html")
 
     try:
-        # The API route first - it works everywhere SMTP might not.
-        if BREVO_API_KEY:
-            _send_via_brevo_api(to, subject, body_text, body_html)
-            log.info("Sent email to %s via Brevo API: %s", to, subject)
+        # The HTTPS route first: it works on hosts that block outbound
+        # SMTP ports outright, which Render's free tier does.
+        if RESEND_API_KEY:
+            _send_via_resend(to, subject, body_text, body_html)
+            log.info("Sent email to %s via Resend: %s", to, subject)
             return True
 
         # Port 465 is implicit TLS; everything else is plain then STARTTLS.

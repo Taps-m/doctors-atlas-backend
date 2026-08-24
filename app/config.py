@@ -14,6 +14,12 @@ JWT_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 # Plain SMTP, so any provider works by changing these values alone.
 # For Brevo: smtp-relay.brevo.com / 587, with the SMTP key as the
 # password. Leave SMTP_HOST unset and the app simply doesn't send mail.
+# Brevo's HTTPS API, used in preference to SMTP when a key is present.
+# This exists because some hosts (Render's free tier among them) block
+# outbound connections on every SMTP port, so a perfectly correct SMTP
+# configuration just times out. Port 443 is never blocked.
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = os.environ.get("SMTP_PORT", "587")
 SMTP_USER = os.environ.get("SMTP_USER", "")

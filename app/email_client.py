@@ -1,11 +1,15 @@
 """
 Outbound email, deliberately provider-agnostic.
 
-Every transactional service worth using (Brevo, Resend, SendGrid,
-Mailgun, Postmark, or plain Gmail) speaks SMTP, so this uses Python's
-standard library rather than a vendor SDK. Switching provider is an
-environment-variable change, not a code change, and it adds no new
-dependency to deploy.
+Two ways out, both stdlib-only - no vendor SDK, no new dependency:
+
+  1. Brevo's HTTPS API, if BREVO_API_KEY is set. Preferred, because
+     many hosts (Render's free tier included) block outbound traffic
+     on every SMTP port, so SMTP times out no matter how correct the
+     settings are. Port 443 always works.
+  2. Plain SMTP otherwise, which any provider speaks - Resend,
+     SendGrid, Mailgun, Postmark, Gmail - so switching is an
+     environment-variable change, not a code change.
 
 Two rules this module must never break:
 
@@ -13,18 +17,22 @@ Two rules this module must never break:
     notification about it is not. Nothing here may raise into a request
     handler, so a patient can never be told their booking failed
     because a mail server was slow.
-  * It is silent until configured. With no SMTP settings present it
-    logs once and does nothing, so the app runs perfectly well before
-    anyone sets this up.
+  * It is silent until configured. With neither route set up it logs
+    once and does nothing, so the app runs perfectly well before
+    anyone configures mail at all.
 """
 
+import json
 import logging
 import smtplib
 import ssl
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from email.utils import formataddr
 
 from app.config import (
+    BREVO_API_KEY,
     SMTP_HOST,
     SMTP_PORT,
     SMTP_USER,
@@ -39,8 +47,45 @@ log = logging.getLogger(__name__)
 SMTP_TIMEOUT_SECONDS = 15
 
 
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
+
 def email_configured() -> bool:
-    return bool(SMTP_HOST and MAIL_FROM)
+    return bool((BREVO_API_KEY or SMTP_HOST) and MAIL_FROM)
+
+
+def _send_via_brevo_api(to: str, subject: str, body_text: str, body_html: str) -> None:
+    """
+    One message over HTTPS. Raises on any non-2xx so the caller's
+    except block logs it with the response body, which is where Brevo
+    puts the actual reason (unverified sender, bad key, quota).
+    """
+    payload = {
+        "sender": {"name": MAIL_FROM_NAME or "Doctors Atlas", "email": MAIL_FROM},
+        "to": [{"email": to}],
+        "subject": subject,
+        "textContent": body_text,
+    }
+    if body_html:
+        payload["htmlContent"] = body_html
+
+    request = urllib.request.Request(
+        BREVO_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "api-key": BREVO_API_KEY,
+            "content-type": "application/json",
+            "accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=SMTP_TIMEOUT_SECONDS) as response:
+            if response.status >= 300:
+                raise RuntimeError(f"Brevo returned {response.status}")
+    except urllib.error.HTTPError as err:
+        detail = err.read().decode("utf-8", "replace")[:500]
+        raise RuntimeError(f"Brevo rejected the message ({err.code}): {detail}") from err
 
 
 def send_email(to: str, subject: str, body_text: str, body_html: str = "") -> bool:
@@ -63,6 +108,12 @@ def send_email(to: str, subject: str, body_text: str, body_html: str = "") -> bo
         message.add_alternative(body_html, subtype="html")
 
     try:
+        # The API route first - it works everywhere SMTP might not.
+        if BREVO_API_KEY:
+            _send_via_brevo_api(to, subject, body_text, body_html)
+            log.info("Sent email to %s via Brevo API: %s", to, subject)
+            return True
+
         # Port 465 is implicit TLS; everything else is plain then STARTTLS.
         if int(SMTP_PORT) == 465:
             context = ssl.create_default_context()

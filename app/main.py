@@ -5,7 +5,10 @@ from sqlalchemy import text
 from app.config import CORS_ORIGINS
 from app.database import engine, Base
 from app import models  # noqa: F401  (registers models with Base.metadata)
-from app.routers import auth, stats, advisor, actions, daily_log, patients, appointments, settings
+from app.routers import (
+    auth, stats, advisor, actions, daily_log, patients, appointments, settings,
+    booking, public_booking,
+)
 
 app = FastAPI(title="Doctors Atlas API")
 
@@ -25,7 +28,47 @@ app.add_middleware(
 # and no manual database step is required when deploying.
 COLUMN_MIGRATIONS = [
     "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS logo_url TEXT",
+    # Public patient booking.
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS booking_slug TEXT",
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS booking_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS slot_minutes INTEGER NOT NULL DEFAULT 30",
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS booking_hours JSONB",
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS notify_email TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_clinics_booking_slug ON clinics (booking_slug)",
+    "ALTER TABLE patients ADD COLUMN IF NOT EXISTS email TEXT",
+    "ALTER TABLE visits ADD COLUMN IF NOT EXISTS notes TEXT",
+    "ALTER TABLE visits ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'clinic'",
 ]
+
+
+def backfill_booking_slugs():
+    """
+    Give every existing clinic a booking slug derived from its name, so
+    the doctor never has to invent one. Runs once per clinic - a clinic
+    that already has a slug is left completely alone, including one the
+    doctor has since edited by hand.
+    """
+    from app.booking_utils import slugify, unique_slug
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, name FROM clinics WHERE booking_slug IS NULL OR booking_slug = ''")
+        ).fetchall()
+        if not rows:
+            return
+        taken = {
+            r[0]
+            for r in conn.execute(
+                text("SELECT booking_slug FROM clinics WHERE booking_slug IS NOT NULL")
+            ).fetchall()
+        }
+        for clinic_id, name in rows:
+            slug = unique_slug(slugify(name) or f"clinic-{clinic_id}", taken)
+            taken.add(slug)
+            conn.execute(
+                text("UPDATE clinics SET booking_slug = :s WHERE id = :i"),
+                {"s": slug, "i": clinic_id},
+            )
 
 
 @app.on_event("startup")
@@ -37,6 +80,8 @@ def on_startup():
     with engine.begin() as conn:
         for statement in COLUMN_MIGRATIONS:
             conn.execute(text(statement))
+
+    backfill_booking_slugs()
 
 
 @app.get("/health")
@@ -52,3 +97,6 @@ app.include_router(daily_log.router, prefix="/daily-log", tags=["daily-log"])
 app.include_router(patients.router, prefix="/patients", tags=["patients"])
 app.include_router(appointments.router, prefix="/appointments", tags=["appointments"])
 app.include_router(settings.router, prefix="/settings", tags=["settings"])
+app.include_router(booking.router, prefix="/booking", tags=["booking"])
+# No auth on this one by design - it is the patient-facing page.
+app.include_router(public_booking.router, prefix="/public/book", tags=["public-booking"])

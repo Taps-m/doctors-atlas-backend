@@ -16,6 +16,27 @@ class Clinic(Base):
     # clinic works perfectly well without one; the UI falls back to a
     # generic icon.
     logo_url = Column(Text)
+
+    # ---------- Public patient booking ----------
+    # The clinic's handle in its public booking URL (/book/<slug>).
+    # Derived from the name once, then only changed deliberately -
+    # changing it breaks links already shared with patients. Note this
+    # is NOT the staff invite code: a patient holding the booking link
+    # must never be able to join the clinic with it.
+    booking_slug = Column(Text, unique=True)
+    # Off until the doctor has set her hours and turned it on, so a
+    # slug can never resolve to a page offering slots she never chose.
+    booking_enabled = Column(Boolean, nullable=False, default=False)
+    # Appointment length in minutes; slots are generated on this grid.
+    slot_minutes = Column(Integer, nullable=False, default=30)
+    # Weekly opening hours, keyed by Python weekday (0=Monday .. 6=Sunday):
+    #   {"0": [{"start": "10:00", "end": "13:00"}, ...], "6": []}
+    # A missing or empty list means closed that day.
+    booking_hours = Column(JSON)
+    # Optional shared inbox (reception@, front desk) that also receives
+    # booking notifications alongside the doctor's own account email.
+    notify_email = Column(Text)
+
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="clinic")
@@ -47,6 +68,7 @@ class Patient(Base):
     clinic_id = Column(Integer, ForeignKey("clinics.id", ondelete="CASCADE"), nullable=False)
     name = Column(Text, nullable=False)
     phone = Column(Text)
+    email = Column(Text)  # optional; collected on the public booking form
     first_visit_at = Column(TIMESTAMP(timezone=True))
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
@@ -64,6 +86,12 @@ class Visit(Base):
     status = Column(Text, nullable=False)  # completed | no_show | cancelled | scheduled
     revenue = Column(Numeric(10, 2), default=0)
     is_repeat_visit = Column(Boolean, default=False)
+    # Whatever the patient wanted the doctor to know, from the public
+    # booking form. Free text, deliberately short.
+    notes = Column(Text)
+    # "clinic" (booked by the doctor or staff) or "online" (booked by a
+    # patient through the public page).
+    source = Column(Text, nullable=False, default="clinic")
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     clinic = relationship("Clinic", back_populates="visits")
@@ -110,6 +138,23 @@ class DailyLog(Base):
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     clinic = relationship("Clinic", back_populates="daily_logs")
+
+
+class BlockedSlot(Base):
+    """
+    Times the clinic is NOT available, on top of the weekly hours -
+    holidays, leave, a blocked afternoon. A row with start_time NULL
+    blocks the whole day; otherwise it blocks the single slot starting
+    at that time.
+    """
+    __tablename__ = "blocked_slots"
+
+    id = Column(Integer, primary_key=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id", ondelete="CASCADE"), nullable=False)
+    block_date = Column(Date, nullable=False)
+    start_time = Column(Text)  # "HH:MM", or NULL for the whole day
+    reason = Column(Text)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
 class AdvisorQuery(Base):

@@ -36,6 +36,7 @@ COLUMN_MIGRATIONS = [
     "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS notify_email TEXT",
     "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS phone TEXT",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_clinics_booking_slug ON clinics (booking_slug)",
+    "ALTER TABLE blocked_slots ADD COLUMN IF NOT EXISTS end_time TEXT",
     "ALTER TABLE patients ADD COLUMN IF NOT EXISTS email TEXT",
     "ALTER TABLE visits ADD COLUMN IF NOT EXISTS notes TEXT",
     "ALTER TABLE visits ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'clinic'",

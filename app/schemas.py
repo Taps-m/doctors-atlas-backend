@@ -172,7 +172,10 @@ class UpdateBookingSettingsRequest(BaseModel):
 
 class BlockSlotRequest(BaseModel):
     block_date: date
-    start_time: Optional[str] = None  # None blocks the whole day
+    # Both None blocks the whole day. Both set blocks that range
+    # (start included, end excluded) - a morning or an afternoon.
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     reason: Optional[str] = None
 
 
@@ -180,6 +183,7 @@ class BlockedSlotOut(BaseModel):
     id: int
     block_date: date
     start_time: Optional[str] = None
+    end_time: Optional[str] = None
     reason: Optional[str] = None
 
     class Config:

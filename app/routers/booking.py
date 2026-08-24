@@ -159,21 +159,41 @@ def add_blocked(
 ):
     clinic = _clinic_for(db, current_user)
 
-    if payload.start_time:
+    def _check(value, label):
+        if not value:
+            return None
         try:
-            hh, mm = payload.start_time.split(":")
+            hh, mm = value.split(":")
             if not (0 <= int(hh) <= 23 and 0 <= int(mm) <= 59):
                 raise ValueError
+            return f"{int(hh):02d}:{int(mm):02d}"
         except Exception:
-            raise HTTPException(status_code=400, detail="Time must look like 09:00")
+            raise HTTPException(
+                status_code=400, detail=f"{label} must look like 09:00"
+            )
+
+    start = _check(payload.start_time, "Start time")
+    end = _check(payload.end_time, "End time")
+
+    # An end without a start would mean "off until 1pm", which the UI
+    # never sends and the availability code has no shape for. Read it
+    # the way the doctor meant it: off from the start of the day.
+    if end and not start:
+        start, end = "00:00", end
+    if start and end and end <= start:
+        raise HTTPException(
+            status_code=400, detail="The end time has to be after the start time"
+        )
 
     existing = (
         db.query(BlockedSlot)
         .filter(
             BlockedSlot.clinic_id == clinic.id,
             BlockedSlot.block_date == payload.block_date,
-            BlockedSlot.start_time.is_(None) if payload.start_time is None
-            else BlockedSlot.start_time == payload.start_time,
+            BlockedSlot.start_time.is_(None) if start is None
+            else BlockedSlot.start_time == start,
+            BlockedSlot.end_time.is_(None) if end is None
+            else BlockedSlot.end_time == end,
         )
         .first()
     )
@@ -183,7 +203,8 @@ def add_blocked(
     block = BlockedSlot(
         clinic_id=clinic.id,
         block_date=payload.block_date,
-        start_time=payload.start_time,
+        start_time=start,
+        end_time=end,
         reason=(payload.reason or "").strip() or None,
     )
     db.add(block)

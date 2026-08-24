@@ -181,3 +181,22 @@ def generate_day_slots(day: date, hours: dict, slot_minutes: int):
             slots.append(cursor)
             cursor += step
     return slots
+
+
+def block_covers(start_time, end_time, hhmm: str) -> bool:
+    """
+    Does one blocked_slots row hide the slot starting at `hhmm`?
+
+    Deliberately handles all three row shapes (see BlockedSlot):
+      - whole day       (start None)        -> everything
+      - a range         (start and end)     -> start <= hhmm < end
+      - a single slot   (start, end None)   -> exact match only
+
+    Comparing "HH:MM" strings works because they are zero-padded and
+    fixed width, so lexical order is chronological order.
+    """
+    if not start_time:
+        return True
+    if end_time:
+        return start_time <= hhmm < end_time
+    return start_time == hhmm

@@ -147,9 +147,16 @@ class DailyLog(Base):
 class BlockedSlot(Base):
     """
     Times the clinic is NOT available, on top of the weekly hours -
-    holidays, leave, a blocked afternoon. A row with start_time NULL
-    blocks the whole day; otherwise it blocks the single slot starting
-    at that time.
+    holidays, leave, a blocked afternoon.
+
+    Three shapes, in the order the doctor thinks about them:
+      start NULL, end NULL -> the whole day is off
+      start set,  end set  -> off from start up to (not including)
+                              end, e.g. an afternoon 13:00 -> 18:00
+      start set,  end NULL -> that one slot only. This is the
+                              pre-range shape; rows created before
+                              part-day blocking still look like this
+                              and must keep working.
     """
     __tablename__ = "blocked_slots"
 
@@ -157,6 +164,7 @@ class BlockedSlot(Base):
     clinic_id = Column(Integer, ForeignKey("clinics.id", ondelete="CASCADE"), nullable=False)
     block_date = Column(Date, nullable=False)
     start_time = Column(Text)  # "HH:MM", or NULL for the whole day
+    end_time = Column(Text)    # "HH:MM", exclusive; NULL = single slot
     reason = Column(Text)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

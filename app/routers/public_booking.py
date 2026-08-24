@@ -30,7 +30,7 @@ from app.schemas import (
     PublicBookingRequest,
     PublicBookingOut,
 )
-from app.booking_utils import generate_day_slots, MAX_DAYS_AHEAD
+from app.booking_utils import generate_day_slots, block_covers, MAX_DAYS_AHEAD
 
 router = APIRouter()
 
@@ -134,9 +134,10 @@ def public_availability(
         if when:
             taken.add(when.strftime("%Y-%m-%d %H:%M"))
 
-    # Blocks: whole days and individual slots.
+    # Blocks: whole days, part-days (a morning or an afternoon), and
+    # single slots. Grouped by date so each day only tests its own.
     blocked_days = set()
-    blocked_slots = set()
+    blocks_by_day = {}
     for b in (
         db.query(BlockedSlot)
         .filter(
@@ -146,10 +147,12 @@ def public_availability(
         )
         .all()
     ):
-        if b.start_time:
-            blocked_slots.add(f"{b.block_date.isoformat()} {b.start_time}")
-        else:
+        if not b.start_time:
             blocked_days.add(b.block_date)
+        else:
+            blocks_by_day.setdefault(b.block_date, []).append(
+                (b.start_time, b.end_time)
+            )
 
     now = datetime.now()
     out = []
@@ -159,10 +162,14 @@ def public_availability(
             out.append(PublicDayOut(date=day, slots=[]))
             continue
 
+        day_blocks = blocks_by_day.get(day, [])
         free = []
         for slot in generate_day_slots(day, clinic.booking_hours or {}, slot_minutes):
             key = slot.strftime("%Y-%m-%d %H:%M")
-            if key in taken or key in blocked_slots:
+            hhmm = slot.strftime("%H:%M")
+            if key in taken:
+                continue
+            if any(block_covers(s, e, hhmm) for s, e in day_blocks):
                 continue
             if slot <= now:
                 continue  # today's slots that have already passed
@@ -236,7 +243,7 @@ def public_book(
         .all()
     )
     for b in day_block:
-        if b.start_time is None or b.start_time == when.strftime("%H:%M"):
+        if block_covers(b.start_time, b.end_time, when.strftime("%H:%M")):
             raise HTTPException(status_code=400, detail="That time is no longer available")
 
     # Already taken? Re-checked here rather than trusting the list the

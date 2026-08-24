@@ -134,9 +134,21 @@ def compute_stats(
     cur = summarize(current)
     prev = summarize(previous)
 
+    # Whether the previous period has anything to compare against at
+    # all. Without this the frontend cannot tell "genuinely unchanged"
+    # from "nothing to compare with", and ends up showing a reassuring
+    # green 0% to a clinic that simply has no history yet.
+    has_baseline = len(previous) > 0
+
     def pct_change(new, old):
+        """None means "no comparison possible" - never silently 0."""
+        if not has_baseline:
+            return None
         if old == 0:
-            return 0.0
+            # A percentage of zero is undefined - whether the new value
+            # is 0 or 50. Say "no comparison" rather than printing an
+            # infinity or a misleading 0%.
+            return None
         return round((new - old) / old * 100, 1)
 
     health_score = round(
@@ -158,9 +170,18 @@ def compute_stats(
 
     return {
         "period": {"start": start.isoformat(), "end": end.isoformat()},
+        # True only when the preceding window actually has logged days.
+        # Every change_pct below is null when this is false.
+        "has_baseline": has_baseline,
         "patients": {"value": cur["patients"], "change_pct": pct_change(cur["patients"], prev["patients"])},
         "revenue": {"value": round(cur["revenue"], 2), "change_pct": pct_change(cur["revenue"], prev["revenue"])},
         "repeat_visits": {"value": round(cur["repeat_rate"], 1), "change_pct": pct_change(cur["repeat_rate"], prev["repeat_rate"])},
         "no_show_rate": {"value": round(cur["no_show_rate"], 1), "change_pct": pct_change(cur["no_show_rate"], prev["no_show_rate"])},
-        "practice_health": {"value": health_score, "change_pts": health_score - prev_health_score},
+        "practice_health": {
+            "value": health_score,
+            # Also null without a baseline: comparing against a health
+            # score derived from an empty period is meaningless, and it
+            # was previously being rendered as a confident gain.
+            "change_pts": (health_score - prev_health_score) if has_baseline else None,
+        },
     }

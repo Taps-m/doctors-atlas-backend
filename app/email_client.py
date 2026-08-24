@@ -63,7 +63,16 @@ def _post_json(url: str, headers: dict, payload: dict, provider: str) -> None:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"content-type": "application/json", **headers},
+        headers={
+            "content-type": "application/json",
+            "accept": "application/json",
+            # Cloudflare sits in front of these APIs and blocks the
+            # default "Python-urllib/3.x" agent outright, returning a
+            # 403 with code 1010 before the request ever reaches the
+            # provider. A named agent is all it takes to pass.
+            "user-agent": "DoctorsAtlas/1.0 (+https://doctors-atlas.vercel.app)",
+            **headers,
+        },
         method="POST",
     )
     try:

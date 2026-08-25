@@ -37,6 +37,30 @@ COLUMN_MIGRATIONS = [
     "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS phone TEXT",
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_clinics_booking_slug ON clinics (booking_slug)",
     "ALTER TABLE blocked_slots ADD COLUMN IF NOT EXISTS end_time TEXT",
+    # See the note on Visit.scheduled_at. Existing rows hold the naive
+    # wall-clock value that Postgres labelled UTC, so reading it back
+    # AT TIME ZONE 'UTC' returns exactly the time that was booked.
+    #
+    # Guarded by an explicit type check rather than run blind: this
+    # statement executes on every startup, and converting an already
+    # converted column would depend on the server's session timezone
+    # to be harmless. Appointment times are not something to leave to
+    # a default.
+    """
+    DO $$
+    BEGIN
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'visits'
+              AND column_name = 'scheduled_at'
+              AND data_type = 'timestamp with time zone'
+        ) THEN
+            ALTER TABLE visits
+                ALTER COLUMN scheduled_at TYPE TIMESTAMP WITHOUT TIME ZONE
+                USING scheduled_at AT TIME ZONE 'UTC';
+        END IF;
+    END $$;
+    """,
     "ALTER TABLE patients ADD COLUMN IF NOT EXISTS email TEXT",
     "ALTER TABLE visits ADD COLUMN IF NOT EXISTS notes TEXT",
     "ALTER TABLE visits ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'clinic'",

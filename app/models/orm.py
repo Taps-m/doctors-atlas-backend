@@ -86,7 +86,14 @@ class Visit(Base):
     id = Column(Integer, primary_key=True)
     clinic_id = Column(Integer, ForeignKey("clinics.id", ondelete="CASCADE"), nullable=False)
     patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"), nullable=False)
-    scheduled_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    # Naive on purpose: an appointment is a wall-clock time at the
+    # clinic ("11:00 on Tuesday"), not an instant on a global
+    # timeline. Stored with a timezone, Postgres filed a naive 11:00
+    # as 11:00 UTC and browsers rendered it as 16:30 IST. Everything
+    # that touches this column - slot generation, blocked ranges,
+    # clash checks, datetime.now() - works in naive local time, and
+    # the column now matches.
+    scheduled_at = Column(TIMESTAMP(timezone=False), nullable=False)
     status = Column(Text, nullable=False)  # completed | no_show | cancelled | scheduled
     revenue = Column(Numeric(10, 2), default=0)
     is_repeat_visit = Column(Boolean, default=False)

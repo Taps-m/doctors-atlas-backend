@@ -15,9 +15,14 @@ def _serialize(v: Visit) -> dict:
         "id": v.id,
         "patient_id": v.patient_id,
         "patient_name": v.patient.name if v.patient else "Unknown",
+        "patient_phone": v.patient.phone if v.patient else None,
         "scheduled_at": v.scheduled_at,
         "status": v.status,
         "created_at": v.created_at,
+        # Telemedicine needs to tell the two kinds of visit apart, and
+        # the token is how the doctor can re-send a patient their page.
+        "mode": v.mode or "in_person",
+        "consult_token": v.consult_token,
     }
 
 

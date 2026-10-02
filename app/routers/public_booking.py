@@ -22,8 +22,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.config import PUBLIC_BASE_URL
 from app.models.orm import Clinic, Patient, Visit, BlockedSlot, User
-from app.email_client import send_booking_notification
+from app.email_client import send_booking_notification, send_consult_link
 from app.schemas import (
     PublicClinicOut,
     PublicDayOut,
@@ -31,7 +32,8 @@ from app.schemas import (
     PublicBookingOut,
 )
 from app.booking_utils import (
-    generate_day_slots, block_covers, clinic_now, clinic_today, MAX_DAYS_AHEAD,
+    generate_day_slots, block_covers, clinic_now, clinic_today,
+    new_consult_token, MAX_DAYS_AHEAD,
 )
 
 router = APIRouter()
@@ -103,6 +105,7 @@ def public_clinic(slug: str, db: Session = Depends(get_db)):
         logo_url=clinic.logo_url,
         phone=clinic.phone,
         slot_minutes=clinic.slot_minutes or 30,
+        online_consult_enabled=bool(clinic.online_consult_enabled),
     )
 
 
@@ -211,6 +214,31 @@ def public_book(
             detail=f"Please keep your note under {MAX_MESSAGE} characters",
         )
 
+    mode = (payload.mode or "in_person").strip()
+    if mode not in ("in_person", "online"):
+        raise HTTPException(status_code=400, detail="Unknown appointment type")
+
+    if mode == "online":
+        if not clinic.online_consult_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail="This clinic isn't offering online consultations",
+            )
+        # Email is how the patient receives their consult link, so for
+        # a video appointment it stops being optional.
+        if not email:
+            raise HTTPException(
+                status_code=400,
+                detail="Please add your email - that's where we send your video consultation link",
+            )
+        # India's Telemedicine Practice Guidelines expect the patient to
+        # agree to being seen remotely. One tick, recorded with a time.
+        if not payload.consent:
+            raise HTTPException(
+                status_code=400,
+                detail="Please confirm you agree to a video consultation",
+            )
+
     # The requested time, as a naive local datetime - matching how
     # appointments booked inside the clinic are already stored.
     when = payload.scheduled_at
@@ -311,6 +339,9 @@ def public_book(
         revenue=0,
         notes=message,
         source="online",
+        mode=mode,
+        consult_token=new_consult_token() if mode == "online" else None,
+        consent_at=clinic_now() if mode == "online" else None,
     )
     db.add(visit)
     db.commit()
@@ -334,6 +365,32 @@ def public_book(
         patient_email=email,
         when_text=when.strftime("%A %d %b %Y, %I:%M %p").replace(" 0", " "),
         message_text=message,
+        is_online=(mode == "online"),
     )
 
-    return PublicBookingOut(ok=True, scheduled_at=when, clinic_name=clinic.name)
+    # The patient's own copy, with their consult page. Only for video
+    # appointments - someone coming to the clinic in person has
+    # nothing to click, and an email they didn't ask for is spam.
+    if mode == "online" and email:
+        doctor = (
+            db.query(User)
+            .filter(User.clinic_id == clinic.id, User.role.in_(("doctor", "admin")))
+            .order_by(User.id.asc())
+            .first()
+        )
+        background.add_task(
+            send_consult_link,
+            to=email,
+            clinic_name=clinic.name,
+            doctor_name=doctor.name if doctor else None,
+            when_text=when.strftime("%A %d %b %Y, %I:%M %p").replace(" 0", " "),
+            consult_url=f"{PUBLIC_BASE_URL}/consult/{visit.consult_token}",
+        )
+
+    return PublicBookingOut(
+        ok=True,
+        scheduled_at=when,
+        clinic_name=clinic.name,
+        mode=mode,
+        consult_token=visit.consult_token,
+    )

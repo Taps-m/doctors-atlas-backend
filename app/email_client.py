@@ -154,7 +154,8 @@ def send_email(to: str, subject: str, body_text: str, body_html: str = "") -> bo
 
 
 def send_booking_notification(*, recipients, clinic_name, patient_name, patient_phone,
-                              patient_email, when_text, message_text) -> None:
+                              patient_email, when_text, message_text,
+                              is_online: bool = False) -> None:
     """
     Tells the clinic a patient has booked. Sent to the doctor and, if
     she's set one, a shared clinic inbox. Each address is sent its own
@@ -165,10 +166,11 @@ def send_booking_notification(*, recipients, clinic_name, patient_name, patient_
     if not unique:
         return
 
-    subject = f"New booking: {patient_name} — {when_text}"
+    kind = "video consultation" if is_online else "appointment"
+    subject = f"New {'online booking' if is_online else 'booking'}: {patient_name} — {when_text}"
 
     lines = [
-        f"{patient_name} has booked an appointment at {clinic_name}.",
+        f"{patient_name} has booked a {kind} at {clinic_name}.",
         "",
         f"When:   {when_text}",
         f"Name:   {patient_name}",
@@ -232,3 +234,67 @@ color:#1a9e8f;text-transform:uppercase;">New booking</p>
 
     for address in unique:
         send_email(address, subject, text, html)
+
+
+def send_consult_link(*, to, clinic_name, doctor_name, when_text, consult_url) -> None:
+    """
+    Gives the patient their own consultation page.
+
+    This is the first email Atlas sends to a PATIENT rather than to the
+    clinic, and it carries the only link they will have - so it has to
+    arrive, and it has to be obvious what to do with it.
+
+    Note what it does not contain: the meeting room address. The page
+    behind this link reveals that fifteen minutes before the
+    appointment and stops showing it afterwards, so a forwarded email
+    cannot put a stranger in the doctor's waiting room at midnight.
+    """
+    if not to:
+        return
+
+    subject = f"Your online consultation — {when_text}"
+    who = f"Dr {doctor_name}" if doctor_name else clinic_name
+
+    text = "\n".join([
+        f"Your video consultation with {who} is confirmed.",
+        "",
+        f"When:  {when_text}",
+        "",
+        "Join from this page a few minutes before your time:",
+        consult_url,
+        "",
+        "The Join button appears 15 minutes before your appointment.",
+        "You'll need a phone or computer with a camera and microphone.",
+        "",
+        f"— {clinic_name}",
+    ])
+
+    def esc(s):
+        return (
+            str(s or "")
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        )
+
+    html = f"""<html><body style="margin:0;background:#f4f6fa;padding:24px;
+font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:14px;
+padding:28px 26px;border:1px solid #e4e8f0;">
+    <p style="margin:0 0 4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+color:#1a9e8f;font-weight:700;">Online consultation</p>
+    <h1 style="margin:0 0 18px;font-size:20px;color:#15213b;">Your appointment is confirmed</h1>
+    <p style="margin:0 0 6px;font-size:15px;color:#172033;">
+      With {esc(who)}</p>
+    <p style="margin:0 0 22px;font-size:18px;color:#15213b;font-weight:700;">
+      {esc(when_text)}</p>
+    <a href="{esc(consult_url)}"
+       style="display:inline-block;background:#1a9e8f;color:#fff;text-decoration:none;
+font-weight:700;font-size:15px;padding:13px 22px;border-radius:10px;">
+      Open your consultation page</a>
+    <p style="margin:20px 0 0;font-size:13.5px;color:#6b7a90;line-height:1.55;">
+      The Join button appears 15 minutes before your appointment time.
+      You'll need a phone or computer with a camera and microphone.</p>
+    <p style="margin:18px 0 0;font-size:12.5px;color:#9aa5b5;">{esc(clinic_name)}</p>
+  </div>
+</body></html>"""
+
+    send_email(to, subject, text, html)

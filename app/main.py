@@ -7,7 +7,7 @@ from app.database import engine, Base
 from app import models  # noqa: F401  (registers models with Base.metadata)
 from app.routers import (
     auth, stats, advisor, actions, daily_log, patients, appointments, settings,
-    booking, public_booking,
+    booking, public_booking, consult,
 )
 
 app = FastAPI(title="Doctors Atlas API")
@@ -61,6 +61,14 @@ COLUMN_MIGRATIONS = [
         END IF;
     END $$;
     """,
+    # Online consultation.
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS online_consult_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS consult_room_url TEXT",
+    "ALTER TABLE clinics ADD COLUMN IF NOT EXISTS doctor_reg_no TEXT",
+    "ALTER TABLE visits ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'in_person'",
+    "ALTER TABLE visits ADD COLUMN IF NOT EXISTS consult_token TEXT",
+    "ALTER TABLE visits ADD COLUMN IF NOT EXISTS consent_at TIMESTAMP",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_visits_consult_token ON visits (consult_token)",
     "ALTER TABLE patients ADD COLUMN IF NOT EXISTS email TEXT",
     "ALTER TABLE visits ADD COLUMN IF NOT EXISTS notes TEXT",
     "ALTER TABLE visits ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'clinic'",
@@ -126,3 +134,6 @@ app.include_router(settings.router, prefix="/settings", tags=["settings"])
 app.include_router(booking.router, prefix="/booking", tags=["booking"])
 # No auth on this one by design - it is the patient-facing page.
 app.include_router(public_booking.router, prefix="/public/book", tags=["public-booking"])
+# Also unauthenticated - the patient holds an unguessable token, which
+# is the only credential a consult page needs.
+app.include_router(consult.router, prefix="/public/consult", tags=["consult"])

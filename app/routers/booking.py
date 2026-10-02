@@ -57,6 +57,9 @@ def _settings_payload(db: Session, clinic: Clinic) -> BookingSettingsOut:
         booking_hours=clinic.booking_hours or {},
         notify_email=clinic.notify_email,
         phone=clinic.phone,
+        online_consult_enabled=bool(clinic.online_consult_enabled),
+        consult_room_url=clinic.consult_room_url,
+        doctor_reg_no=clinic.doctor_reg_no,
         blocked=[BlockedSlotOut.model_validate(b) for b in _blocked_for(db, clinic.id)],
     )
 
@@ -131,6 +134,40 @@ def update_booking_settings(
         if num and len(num) > 30:
             raise HTTPException(status_code=400, detail="That phone number is too long")
         clinic.phone = num or None
+
+    if payload.consult_room_url is not None:
+        url = payload.consult_room_url.strip()
+        if url:
+            if len(url) > 500:
+                raise HTTPException(status_code=400, detail="That link is too long")
+            # Deliberately permissive about WHICH provider - Meet today,
+            # something else tomorrow - but it has to be a real https
+            # link, because this is what the patient's browser opens.
+            if not url.startswith("https://"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="The meeting link should start with https:// - copy it from your meeting app",
+                )
+        clinic.consult_room_url = url or None
+
+    if payload.doctor_reg_no is not None:
+        reg = payload.doctor_reg_no.strip()
+        if len(reg) > 60:
+            raise HTTPException(status_code=400, detail="That registration number is too long")
+        clinic.doctor_reg_no = reg or None
+
+    if payload.online_consult_enabled is not None:
+        # Same guard as booking itself: never offer patients something
+        # that leads nowhere. Without a room link, an online
+        # appointment is just a promise nobody can keep.
+        if payload.online_consult_enabled:
+            room = payload.consult_room_url if payload.consult_room_url is not None else clinic.consult_room_url
+            if not (room or "").strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Add your meeting link before turning online consultations on",
+                )
+        clinic.online_consult_enabled = payload.online_consult_enabled
 
     if payload.booking_enabled is not None:
         # Refuse to switch it on with nothing bookable - otherwise she'd

@@ -41,6 +41,21 @@ class Clinic(Base):
     # way to reach the clinic.
     phone = Column(Text)
 
+    # ---------- Online consultation ----------
+    # Off until the doctor has pasted a meeting link and turned it on,
+    # so a patient can never book a video slot that leads nowhere.
+    online_consult_enabled = Column(Boolean, nullable=False, default=False)
+    # Her standing meeting room - a Google Meet link she creates once.
+    # Deliberately NOT shown to patients directly: Atlas reveals it
+    # only on a per-appointment page, inside the join window, so a
+    # forwarded link can't let a stranger knock on her door at 11pm.
+    consult_room_url = Column(Text)
+    # Her medical registration number. Shown on the consult page -
+    # India's Telemedicine Practice Guidelines expect the practitioner
+    # to be identifiable, and it is also most of what makes a video
+    # call feel like a clinic rather than a stranger on a webcam.
+    doctor_reg_no = Column(Text)
+
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     users = relationship("User", back_populates="clinic")
@@ -101,8 +116,23 @@ class Visit(Base):
     # booking form. Free text, deliberately short.
     notes = Column(Text)
     # "clinic" (booked by the doctor or staff) or "online" (booked by a
-    # patient through the public page).
+    # patient through the public page). This is the booking CHANNEL -
+    # not to be confused with `mode` below, which is where the
+    # appointment physically happens.
     source = Column(Text, nullable=False, default="clinic")
+
+    # ---------- Online consultation ----------
+    # "in_person" or "online". Defaults to in_person so every existing
+    # appointment keeps its current meaning.
+    mode = Column(Text, nullable=False, default="in_person")
+    # Unguessable handle for the patient's own consult page
+    # (/consult/<token>). Only set for online appointments. Scoped to
+    # one appointment, so it stops working once the visit is over.
+    consult_token = Column(Text, unique=True)
+    # When the patient agreed to be seen remotely. The Telemedicine
+    # Guidelines expect explicit consent, and a timestamp is the
+    # cheapest honest record of it.
+    consent_at = Column(TIMESTAMP(timezone=False))
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     clinic = relationship("Clinic", back_populates="visits")

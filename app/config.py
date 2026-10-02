@@ -27,4 +27,7 @@ MAIL_FROM = os.environ.get("MAIL_FROM", "")
 MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "Doctors Atlas")
 
 # Where the public booking page lives, used in links inside emails.
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+# Used to build patient-facing links inside emails. Defaults to the
+# live domain rather than an empty string - a consult email with no
+# link in it is worse than no email.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://doctorsatlas.in").rstrip("/")

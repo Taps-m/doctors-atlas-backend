@@ -155,6 +155,10 @@ class BookingSettingsOut(BaseModel):
     notify_email: Optional[str] = None
     # Shown to patients on the booking page so they can call instead.
     phone: Optional[str] = None
+    # Online consultation.
+    online_consult_enabled: bool = False
+    consult_room_url: Optional[str] = None
+    doctor_reg_no: Optional[str] = None
     blocked: List["BlockedSlotOut"] = []
 
 
@@ -168,6 +172,9 @@ class UpdateBookingSettingsRequest(BaseModel):
     # Empty string clears either of these.
     notify_email: Optional[str] = None
     phone: Optional[str] = None
+    online_consult_enabled: Optional[bool] = None
+    consult_room_url: Optional[str] = None
+    doctor_reg_no: Optional[str] = None
 
 
 class BlockSlotRequest(BaseModel):
@@ -201,6 +208,8 @@ class PublicClinicOut(BaseModel):
     logo_url: Optional[str] = None
     phone: Optional[str] = None
     slot_minutes: int
+    # Whether the patient is offered a video appointment at all.
+    online_consult_enabled: bool = False
 
 
 class PublicDayOut(BaseModel):
@@ -214,12 +223,37 @@ class PublicBookingRequest(BaseModel):
     email: Optional[str] = None
     message: Optional[str] = None
     scheduled_at: datetime
+    # "in_person" (default, and what every existing client sends) or
+    # "online". Email and consent are required for the latter.
+    mode: str = "in_person"
+    consent: bool = False
 
 
 class PublicBookingOut(BaseModel):
     ok: bool
     scheduled_at: datetime
     clinic_name: str
+    mode: str = "in_person"
+    # Only present for online appointments - the patient's own consult
+    # page, shown on the confirmation and emailed to them.
+    consult_token: Optional[str] = None
+
+
+class PublicConsultOut(BaseModel):
+    """What the patient sees on their consult page. The meeting link is
+    deliberately absent unless the join window is open."""
+    clinic_name: str
+    logo_url: Optional[str] = None
+    clinic_phone: Optional[str] = None
+    doctor_name: Optional[str] = None
+    doctor_reg_no: Optional[str] = None
+    patient_name: str
+    scheduled_at: datetime
+    status: str
+    join_open: bool
+    opens_at: datetime
+    closes_at: datetime
+    room_url: Optional[str] = None
 
 
 BookingSettingsOut.model_rebuild()

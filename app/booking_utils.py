@@ -221,3 +221,32 @@ def clinic_now() -> datetime:
 
 def clinic_today() -> date:
     return clinic_now().date()
+
+
+# ---------- Online consultation ----------
+
+# How long before the slot the patient may enter, and how long after
+# it the link keeps working. Early enough that nobody is locked out by
+# a slow phone, short enough that a forwarded link is useless an hour
+# later.
+JOIN_OPENS_MINUTES_BEFORE = 15
+JOIN_GRACE_MINUTES_AFTER = 30
+
+
+def new_consult_token() -> str:
+    """
+    An unguessable handle for one appointment's consult page. This is
+    the patient's only credential, so it has to be long enough that
+    nobody finds a live consultation by trying URLs.
+    """
+    import secrets
+    return secrets.token_urlsafe(24)
+
+
+def consult_window(scheduled_at: datetime, slot_minutes: int):
+    """(opens_at, closes_at) for a given appointment."""
+    opens = scheduled_at - timedelta(minutes=JOIN_OPENS_MINUTES_BEFORE)
+    closes = scheduled_at + timedelta(
+        minutes=(slot_minutes or 30) + JOIN_GRACE_MINUTES_AFTER
+    )
+    return opens, closes

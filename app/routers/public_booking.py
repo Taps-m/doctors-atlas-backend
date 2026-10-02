@@ -30,7 +30,9 @@ from app.schemas import (
     PublicBookingRequest,
     PublicBookingOut,
 )
-from app.booking_utils import generate_day_slots, block_covers, MAX_DAYS_AHEAD
+from app.booking_utils import (
+    generate_day_slots, block_covers, clinic_now, clinic_today, MAX_DAYS_AHEAD,
+)
 
 router = APIRouter()
 
@@ -114,7 +116,7 @@ def public_availability(
     clinic = _open_clinic(db, slug)
     days = max(1, min(days, MAX_DAYS_AHEAD))
 
-    today = date.today()
+    today = clinic_today()
     last = today + timedelta(days=days - 1)
     slot_minutes = clinic.slot_minutes or 30
 
@@ -154,7 +156,7 @@ def public_availability(
                 (b.start_time, b.end_time)
             )
 
-    now = datetime.now()
+    now = clinic_now()
     out = []
     for offset in range(days):
         day = today + timedelta(days=offset)
@@ -216,9 +218,9 @@ def public_book(
         when = when.replace(tzinfo=None)
     when = when.replace(second=0, microsecond=0)
 
-    if when <= datetime.now():
+    if when <= clinic_now():
         raise HTTPException(status_code=400, detail="That time has already passed")
-    if when.date() > date.today() + timedelta(days=MAX_DAYS_AHEAD):
+    if when.date() > clinic_today() + timedelta(days=MAX_DAYS_AHEAD):
         raise HTTPException(
             status_code=400,
             detail=f"Bookings can only be made up to {MAX_DAYS_AHEAD} days ahead",
@@ -275,7 +277,7 @@ def public_book(
                 Visit.clinic_id == clinic.id,
                 Visit.patient_id == patient.id,
                 Visit.status == "scheduled",
-                Visit.scheduled_at >= datetime.now(),
+                Visit.scheduled_at >= clinic_now(),
             )
             .count()
         )

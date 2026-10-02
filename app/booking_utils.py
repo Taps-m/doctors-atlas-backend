@@ -11,6 +11,7 @@ way nobody notices until a patient double-books.
 import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 # A slug has to survive being typed, texted and read aloud, so keep it
 # to lowercase letters, digits and single hyphens.
@@ -200,3 +201,23 @@ def block_covers(start_time, end_time, hhmm: str) -> bool:
     if end_time:
         return start_time <= hhmm < end_time
     return start_time == hhmm
+
+
+# The clinic's wall clock. Render runs on UTC, so datetime.now() there
+# is 5.5 hours behind Kolkata - which meant the booking page happily
+# offered 11:30 AM slots at 4:45 PM, because as far as the server was
+# concerned the morning had not happened yet. Every "is this slot in
+# the past" decision has to be made in the clinic's own timezone.
+#
+# Hardcoded to India for now; when Atlas has clinics elsewhere this
+# becomes a column on the clinic.
+CLINIC_TZ = ZoneInfo("Asia/Kolkata")
+
+
+def clinic_now() -> datetime:
+    """Naive local time at the clinic, matching how times are stored."""
+    return datetime.now(CLINIC_TZ).replace(tzinfo=None)
+
+
+def clinic_today() -> date:
+    return clinic_now().date()

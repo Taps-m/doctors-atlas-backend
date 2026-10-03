@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import List, Optional, Literal
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class RegisterRequest(BaseModel):
@@ -254,6 +254,30 @@ class PublicConsultOut(BaseModel):
     opens_at: datetime
     closes_at: datetime
     room_url: Optional[str] = None
+    # Waiting-room extras. None for an ordinary booked consultation.
+    waiting: bool = False
+    queue_position: Optional[int] = None
+    queue_code: Optional[str] = None
+
+
+class WaitingRoomOut(BaseModel):
+    """The clinic's permanent walk-in page, before anyone joins."""
+    clinic_name: str
+    logo_url: Optional[str] = None
+    clinic_phone: Optional[str] = None
+    doctor_name: Optional[str] = None
+    doctor_reg_no: Optional[str] = None
+    open: bool
+    waiting_count: int = 0
+
+
+class WaitingRoomJoin(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    phone: Optional[str] = Field(default=None, max_length=20)
+
+
+class WaitingRoomJoined(BaseModel):
+    token: str
 
 
 BookingSettingsOut.model_rebuild()

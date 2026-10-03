@@ -233,6 +233,16 @@ JOIN_OPENS_MINUTES_BEFORE = 15
 JOIN_GRACE_MINUTES_AFTER = 30
 
 
+def new_queue_code() -> str:
+    """
+    A four-digit code the doctor reads back to the patient before
+    starting. Not a secret - the token is what secures the page - so
+    it only has to be short enough to say out loud.
+    """
+    import secrets
+    return f"{secrets.randbelow(9000) + 1000}"
+
+
 def new_consult_token() -> str:
     """
     An unguessable handle for one appointment's consult page. This is

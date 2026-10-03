@@ -133,6 +133,14 @@ class Visit(Base):
     # Guidelines expect explicit consent, and a timestamp is the
     # cheapest honest record of it.
     consent_at = Column(TIMESTAMP(timezone=False))
+    # Walk-in waiting room. Kept apart from `status` so dashboards and
+    # reports, which read status, carry on working untouched.
+    waiting_since = Column(TIMESTAMP(timezone=False))
+    admitted_at = Column(TIMESTAMP(timezone=False))
+    # Four digits shown to patient and doctor alike. She reads it back
+    # before starting, so a mix-up in the queue cannot put the wrong
+    # person in the room.
+    queue_code = Column(Text)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     clinic = relationship("Clinic", back_populates="visits")

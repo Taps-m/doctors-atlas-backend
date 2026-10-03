@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.orm import User, Visit, Patient
 from app.security import require_role
 from app.schemas import AppointmentCreate, AppointmentStatusUpdate
+from app.booking_utils import clinic_now
 
 router = APIRouter()
 
@@ -23,6 +24,9 @@ def _serialize(v: Visit) -> dict:
         # the token is how the doctor can re-send a patient their page.
         "mode": v.mode or "in_person",
         "consult_token": v.consult_token,
+        "queue_code": v.queue_code,
+        "waiting_since": v.waiting_since,
+        "admitted_at": v.admitted_at,
     }
 
 
@@ -110,3 +114,62 @@ def delete_appointment(
     db.delete(visit)
     db.commit()
     return None
+
+
+# --------------------------------------------------------------------
+# The walk-in queue, doctor's side.
+# --------------------------------------------------------------------
+
+
+@router.get("/waiting")
+def list_waiting(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("doctor", "admin", "staff")),
+):
+    """Everyone sitting in the waiting room, longest wait first."""
+    if not current_user.clinic_id:
+        raise HTTPException(status_code=400, detail="This account has no clinic attached")
+
+    visits = (
+        db.query(Visit)
+        .options(joinedload(Visit.patient))
+        .filter(
+            Visit.clinic_id == current_user.clinic_id,
+            Visit.waiting_since.isnot(None),
+            Visit.admitted_at.is_(None),
+            Visit.status == "scheduled",
+        )
+        .order_by(Visit.waiting_since.asc())
+        .all()
+    )
+    return [_serialize(v) for v in visits]
+
+
+@router.post("/{appointment_id}/admit")
+def admit_patient(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("doctor", "admin", "staff")),
+):
+    """
+    Call the next patient in. Stamping admitted_at is what opens their
+    page - the four-digit code is for her to read back once they are
+    both in the room, not a second gate.
+    """
+    if not current_user.clinic_id:
+        raise HTTPException(status_code=400, detail="This account has no clinic attached")
+
+    visit = (
+        db.query(Visit)
+        .options(joinedload(Visit.patient))
+        .filter(Visit.id == appointment_id, Visit.clinic_id == current_user.clinic_id)
+        .first()
+    )
+    if not visit:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    if visit.admitted_at is None:
+        visit.admitted_at = clinic_now()
+        db.commit()
+        db.refresh(visit)
+    return _serialize(visit)

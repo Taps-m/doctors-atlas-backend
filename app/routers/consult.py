@@ -146,8 +146,25 @@ def consult_page(token: str, db: Session = Depends(get_db)):
 # --------------------------------------------------------------------
 
 
+# The bare "/room" address, with no clinic named. Resolves to the
+# lowest-numbered clinic offering video consultations, which is stable
+# for the life of that clinic - the same trick the bare booking URL
+# uses, so the front page can carry a link before anyone has typed a
+# slug.
+DEFAULT_ROOM_SLUG = "_default"
+
+
 def _room_clinic(db: Session, slug: str) -> Clinic:
-    clinic = db.query(Clinic).filter(Clinic.booking_slug == slug).first()
+    if slug == DEFAULT_ROOM_SLUG:
+        clinic = (
+            db.query(Clinic)
+            .filter(Clinic.online_consult_enabled.is_(True))
+            .order_by(Clinic.id.asc())
+            .first()
+        )
+    else:
+        clinic = db.query(Clinic).filter(Clinic.booking_slug == slug).first()
+
     if not clinic or not clinic.online_consult_enabled:
         raise HTTPException(status_code=404, detail="This consultation page isn't available")
     return clinic
